@@ -35,3 +35,50 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Archivos temporales y de sistema
+*.log
+*.tmp
+*.swp
+*.bak
+.DS_Store
+Thumbs.db
+
+# Archivos de IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Archivos Python si usas scripts para plantillas
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+
+# Archivos de AWS CLI (credenciales NO deben estar en el repo)
+*.pem
+*.key
+.aws/
+.aws-sam/
+
+# Archivos de empaquetado
+build/
+dist/
+*.zip
+*.tar.gz
+
+# CloudFormation stack files (si se generan dinámicamente)
+*.template.json
+*.template.yaml
+*.stack.json
+*.stack.yaml
+
+
+# Node.js (si usas SAM + JS/TS)
+node_modules/
+package-lock.json
+
+# SAM / CDK adicionales (si usas estos)
+cdk.out/
+
