@@ -236,6 +236,16 @@ Resources:
               mode: '000400'
               owner: root
               group: root
+            /var/www/html/jcasillas.php:
+              content: !Sub | 
+                <html>
+                  <body>
+                    <h1>Hey, Quino was here...</h1>
+                  </body>
+                </html>
+              mode: '000600'
+              owner: apache
+              group: apache
           services:
             sysvinit:
               mysqld:
