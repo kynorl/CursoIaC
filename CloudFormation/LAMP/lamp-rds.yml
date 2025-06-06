@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   Plantilla para desplegar una pila LAMP en EC2 y RDS. 
 Parameters:
+  DefaultVPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: "ID of the default VPC"
+    Type: String
+    Default: "pc-0c833698b8c87b9d8"
   DBName:
     Default: MyDatabase
     Description: MySQL database name
@@ -80,6 +85,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable HTTP access via port 80
+      VpcId: !Ref DefaultVPCId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: '80'
@@ -93,11 +99,12 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable MySQL access from WebServerSecurityGroup
+      VpcId: !Ref DefaultVPCId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: '3306'
           ToPort: '3306'
-          SourceSecurityGroupName: !Ref WebServerSecurityGroup
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
   # DBSubnetGroup:
   #   Type: AWS::RDS::DBSubnetGroup
   #   Properties:
@@ -122,7 +129,7 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       StorageType: gp3
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      #DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 0
       EnableIAMDatabaseAuthentication: false
       StorageEncrypted: false
@@ -130,18 +137,19 @@ Resources:
       DeletionProtection: false
   WebServerInstance:
     Type: AWS::EC2::Instance
+    DependsOn: LampDBInstance
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
           InstallAndRun:
             - Install
-            - Configure
+        #    - Configure
         Install:
           packages:
             yum:
               mysql: []
               #mysql-server: []
-              #mysql-libs: []
+              mysql-libs: []
               httpd: []
               php: []
               php-mysql: []
@@ -232,13 +240,16 @@ Resources:
                   - |2
                           }
                   - |2
-                          $Database   = "localhost";
+                  - '      $Database     = "'
+                  - !GetAtt LampDBInstance.Endpoint.Address
+                  - |
+                    ";
                   - '      $DBUser     = "'
-                  - !Ref DBUser
+                  - !Ref DBRootUser
                   - |
                     ";
                   - '      $DBPassword = "'
-                  - !Ref DBPassword
+                  - !Ref DBRootPassword
                   - |
                     ";
                   - |2
@@ -321,18 +332,18 @@ Resources:
                 files:
                   - /etc/cfn/cfn-hup.conf
                   - /etc/cfn/hooks.d/cfn-auto-reloader.conf
-        Configure:
-          commands:
-            # 01_set_mysql_root_password:
-            #   command: !Sub |-
-            #     mysqladmin -u root password '${DBRootPassword}'
-            #   test: !Sub |-
-            #     $(mysql ${DBName} -u root --password='${DBRootPassword}' >/dev/null 2>&1 </dev/null); (( $? != 0 ))
-            # 02_create_database:
-            #   command: !Sub |-
-            #     mysql -u root --password='${DBRootPassword}' < /tmp/setup.mysql
-            #   test: !Sub |-
-            #     $(mysql ${DBName} -u root --password='${DBRootPassword}' >/dev/null 2>&1 </dev/null); (( $? != 0 ))
+        # Configure:
+        #   commands:
+        #     01_set_mysql_root_password:
+        #       command: !Sub |-
+        #         mysqladmin -u root password '${DBRootPassword}'
+        #       test: !Sub |-
+        #         $(mysql ${DBName} -u root --password='${DBRootPassword}' >/dev/null 2>&1 </dev/null); (( $? != 0 ))
+        #     02_create_database:
+        #       command: !Sub |-
+        #         mysql -u root --password='${DBRootPassword}' < /tmp/setup.mysql
+        #       test: !Sub |-
+        #         $(mysql ${DBName} -u root --password='${DBRootPassword}' >/dev/null 2>&1 </dev/null); (( $? != 0 ))
     Properties:
       IamInstanceProfile: !Ref MyInstanceProfile
       ImageId: !FindInMap 
