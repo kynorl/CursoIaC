@@ -1,70 +1,63 @@
-AWSTemplateFormatVersion: 2010-09-09
+AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Plantilla para desplegar una pila LAMP en EC2 y RDS. 
+  Plantilla para desplegar la parte de red de una pila LAMP en EC2. 
 Parameters:
-  DefaultVPCId:
-    Type: AWS::EC2::VPC::Id
-    Description: "ID of the default VPC"
+  ExerciseName:
+    Description: Name of the exercise
     Type: String
-    Default: "pc-0c833698b8c87b9d8"
+    Default: Sesiones56
+  KeyName:
+    Description: Name of the key pair to use for SSH access
+    Type: String
+    Default: vockey
   DBName:
+    Type: String
     Default: MyDatabase
     Description: MySQL database name
-    Type: String
-    MinLength: '1'
-    MaxLength: '64'
+    MinLength: 1
+    MaxLength: 64
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
   DBUser:
-    NoEcho: 'true'
-    Description: Username for MySQL database access
     Type: String
-    MinLength: '1'
-    MaxLength: '16'
+    NoEcho: true
+    Description: MySQL database user
+    MinLength: 1
+    MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
   DBPassword:
-    NoEcho: 'true'
-    Description: Password for MySQL database access
     Type: String
-    MinLength: '1'
-    MaxLength: '41'
+    NoEcho: true
+    Description: MySQL database user password
+    MinLength: 1
+    MaxLength: 41
     AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: must contain only alphanumeric characters.
   DBRootUser:
-    NoEcho: 'true'
-    Description: Username for MySQL database access
     Type: String
-    MinLength: '1'
-    MaxLength: '16'
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
-    Default: 'root'
+    NoEcho: true
+    Default: admin
+    Description: Admin user for RDS
+    MinLength: 1
+    MaxLength: 16
   DBRootPassword:
-    NoEcho: 'true'
-    Description: Root password for MySQL
     Type: String
-    MinLength: '1'
-    MaxLength: '41'
+    NoEcho: true
+    Description: Admin password for RDS
+    MinLength: 1
+    MaxLength: 41
     AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: must contain only alphanumeric characters.
   InstanceType:
-    Description: WebServer EC2 instance type
     Type: String
-    Default: t2.small
+    Default: t2.micro
     AllowedValues:
       - t2.nano
       - t2.micro
       - t2.small
-    ConstraintDescription: must be a valid EC2 instance type.
+    Description: EC2 instance type
   SSHLocation:
-    Description: ' The IP address range that can be used to SSH to the EC2 instances'
+    Description: IP range for SSH access
     Type: String
-    MinLength: '9'
-    MaxLength: '18'
     Default: 0.0.0.0/0
-    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
-    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    AllowedPattern: '(\d{1,3}\.){3}\d{1,3}/\d{1,2}'
 Mappings:
   AWSInstanceType2Arch:
     t2.nano:
@@ -80,230 +73,327 @@ Mappings:
     us-west-1:
       HVM64: ami-088c153f74339f34c
       HVMG2: ami-0a7fc72dc0e51aa77
+
 Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join ["-", [!Ref ExerciseName, VPC, !Ref AWS::StackName]]
+
+  FirstPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, FirstPublicSubnet, !Ref AWS::StackName],
+            ]
+
+  FirstPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, FirstPrivateSubnet, !Ref AWS::StackName],
+            ]
+
+  SecondPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, SecondPublicSubnet, !Ref AWS::StackName],
+            ]
+
+  SecondPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, SecondPrivateSubnet, !Ref AWS::StackName],
+            ]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ["-", [!Ref ExerciseName, IGW, !Ref AWS::StackName]]
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, PublicRouteTable, !Ref AWS::StackName],
+            ]
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  FirstPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PublicRoute
+      - VPCGatewayAttachment
+    Properties:
+      SubnetId: !Ref FirstPublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  SecondPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PublicRoute
+      - VPCGatewayAttachment
+    Properties:
+      SubnetId: !Ref SecondPublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref FirstPublicSubnet
+      Tags:
+        - Key: Name
+          Value:
+            !Join ["-", [!Ref ExerciseName, NatGateway, !Ref AWS::StackName]]
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, PrivateRouteTable, !Ref AWS::StackName],
+            ]
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  FirstPrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FirstPrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  SecondPrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecondPrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # SECURITY GROUPS
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable HTTP access via port 80
-      VpcId: !Ref DefaultVPCId
+      GroupDescription: !Join [" ", [!Ref ExerciseName, WebServerSecGrp]]
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: '80'
-          ToPort: '80'
+          FromPort: 80
+          ToPort: 80
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: '22'
-          ToPort: '22'
-          CidrIp: !Ref SSHLocation
-  DBSecurityGroup:
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, WebServerSecGrp, !Ref AWS::StackName],
+            ]
+
+  DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable MySQL access from WebServerSecurityGroup
-      VpcId: !Ref DefaultVPCId
+      GroupDescription: !Join [" ", [!Ref ExerciseName, DatabaseSecGrp]]
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: '3306'
-          ToPort: '3306'
+          FromPort: 3306
+          ToPort: 3306
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
-  # DBSubnetGroup:
-  #   Type: AWS::RDS::DBSubnetGroup
-  #   Properties:
-  #     DBSubnetGroupDescription: Subnet group for RDS in same AZ as EC2 instance
-  #     SubnetIds:
-  #       - subnet-09b94609e53a3bc50
-  #       - subnet-09b545c7eb18ea8ad
-  LampDBInstance:
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, DatabaseSecGrp, !Ref AWS::StackName],
+            ]
+
+  # DATABASE
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref FirstPrivateSubnet
+        - !Ref SecondPrivateSubnet
+      DBSubnetGroupName: !Join ["-", [!Ref ExerciseName, DBSubnetGroup]]
+
+  DatabaseServer:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: LampDBInstance
-      AllocatedStorage: 20
+      DBInstanceIdentifier: lampdb
       DBInstanceClass: db.t3.micro
-      Engine: mysql
-      EngineVersion: "8.0"
+      Engine: MariaDB
+      EngineVersion: "10.11.13"
+      AllocatedStorage: 20
+      DBName: !Ref DBName
       MasterUsername: !Ref DBRootUser
       MasterUserPassword: !Ref DBRootPassword
-      DBName: !Ref DBName
       VPCSecurityGroups:
-        - !Ref DBSecurityGroup
-      Port: 3306
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
       MultiAZ: false
       PubliclyAccessible: false
-      StorageType: gp3
-      #DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 0
-      EnableIAMDatabaseAuthentication: false
       StorageEncrypted: false
       MonitoringInterval: 0
       DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, DatabaseServer, !Ref AWS::StackName],
+            ]
+
+  MyInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - "LabRole"
+
   WebServerInstance:
     Type: AWS::EC2::Instance
-    DependsOn: LampDBInstance
+    DependsOn: DatabaseServer
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
           InstallAndRun:
             - Install
-        #    - Configure
+            - Configure
         Install:
           packages:
             yum:
-              mysql: []
-              #mysql-server: []
-              mysql-libs: []
               httpd: []
               php: []
               php-mysql: []
+              mariadb: []  # Cliente MariaDB para conectarse a RDS
           files:
             /var/www/html/index.php:
-              content: !Join 
-                - ''
-                - - |
-                    <html>
-                  - |2
-                      <head>
-                  - |2
-                        <title>AWS CloudFormation PHP Sample</title>
-                  - |2
-                        <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
-                  - |2
-                      </head>
-                  - |2
-                      <body>
-                  - |2
-                        <h1>Welcome to the AWS CloudFormation PHP Sample</h1>
-                  - |2
-                        <p/>
-                  - |2
-                        <?php
-                  - |2
-                          // Print out the current data and time
-                  - |2
-                          print "The Current Date and Time is: <br/>";
-                  - |2
-                          print date("g:i A l, F j Y.");
-                  - |2
-                        ?>
-                  - |2
-                        <p/>
-                  - |2
-                        <?php
-                  - |2
-                          // Setup a handle for CURL
-                  - |2
-                          $curl_handle=curl_init();
-                  - |2
-                          curl_setopt($curl_handle,CURLOPT_CONNECTTIMEOUT,2);
-                  - |2
-                          curl_setopt($curl_handle,CURLOPT_RETURNTRANSFER,1);
-                  - |2
-                          // Get the hostname of the intance from the instance metadata
-                  - |2
-                          curl_setopt($curl_handle,CURLOPT_URL,'http://169.254.169.254/latest/meta-data/public-hostname');
-                  - |2
-                          $hostname = curl_exec($curl_handle);
-                  - |2
-                          if (empty($hostname))
-                  - |2
-                          {
-                  - |2
-                            print "Sorry, for some reason, we got no hostname back <br />";
-                  - |2
-                          }
-                  - |2
-                          else
-                  - |2
-                          {
-                  - |2
-                            print "Server = " . $hostname . "<br />";
-                  - |2
-                          }
-                  - |2
-                          // Get the instance-id of the intance from the instance metadata
-                  - |2
-                          curl_setopt($curl_handle,CURLOPT_URL,'http://169.254.169.254/latest/meta-data/instance-id');
-                  - |2
-                          $instanceid = curl_exec($curl_handle);
-                  - |2
-                          if (empty($instanceid))
-                  - |2
-                          {
-                  - |2
-                            print "Sorry, for some reason, we got no instance id back <br />";
-                  - |2
-                          }
-                  - |2
-                          else
-                  - |2
-                          {
-                  - |2
-                            print "EC2 instance-id = " . $instanceid . "<br />";
-                  - |2
-                          }
-                  - |2
-                  - '      $Database     = "'
-                  - !GetAtt LampDBInstance.Endpoint.Address
-                  - |
-                    ";
-                  - '      $DBUser     = "'
-                  - !Ref DBRootUser
-                  - |
-                    ";
-                  - '      $DBPassword = "'
-                  - !Ref DBRootPassword
-                  - |
-                    ";
-                  - |2
-                          print "Database = " . $Database . "<br />";
-                  - |2
-                          $dbconnection = mysql_connect($Database, $DBUser, $DBPassword)
-                  - |2
-                                          or die("Could not connect: " . mysql_error());
-                  - |2
-                          print ("Connected to $Database successfully");
-                  - |2
-                          mysql_close($dbconnection);
-                  - |2
-                        ?>
-                  - |2
-                        <h2>PHP Information</h2>
-                  - |2
-                        <p/>
-                  - |2
-                        <?php
-                  - |2
-                          phpinfo();
-                  - |2
-                        ?>
-                  - |2
-                      </body>
-                  - |
-                    </html>
-              mode: '000600'
+              content: !Sub |
+                <html>
+                <head><title>PHP + RDS Sample</title></head>
+                <body>
+                <h1>Connected to RDS MySQL</h1>
+                <?php
+                print "The Current Date and Time is: <br/>";
+                print date("g:i A l, F j Y.");
+                $curl_handle=curl_init();
+                curl_setopt($curl_handle,CURLOPT_CONNECTTIMEOUT,2);
+                curl_setopt($curl_handle,CURLOPT_RETURNTRANSFER,1);
+                // Get the hostname of the intance from the instance metadata
+                curl_setopt($curl_handle,CURLOPT_URL,'http://169.254.169.254/latest/meta-data/public-hostname');
+                $hostname = curl_exec($curl_handle);
+                if (empty($hostname))
+                {
+                  print "Sorry, for some reason, we got no hostname back <br />";
+                }
+                else
+                {
+                  print "Server = " . $hostname . "<br />";
+                }
+                // Get the instance-id of the intance from the instance metadata
+                curl_setopt($curl_handle,CURLOPT_URL,'http://169.254.169.254/latest/meta-data/instance-id');
+                $instanceid = curl_exec($curl_handle);
+                if (empty($instanceid))
+                {
+                  print "Sorry, for some reason, we got no instance id back <br />";
+                }
+                else
+                {
+                  print "EC2 instance-id = " . $instanceid . "<br />";
+                }
+                $Database   = "${DBName}";
+                $DBUser     = "${DBUser}";
+                $DBPassword = "${DBPassword}";
+                $DBHost     = "${DatabaseServer.Endpoint.Address}";
+                $dbconnection = mysqli_connect($DBHost, $DBUser, $DBPassword, $Database)
+                    or die("Connection failed: " . mysqli_connect_error());
+                echo "Connected successfully to ${DBName} on ${DatabaseServer.Endpoint.Address}";
+                mysqli_close($dbconnection);
+                ?>
+                </body>
+                </html>
+              mode: '000644'
               owner: apache
               group: apache
-            # /tmp/setup.mysql:
-            #   content: !Sub |
-            #     CREATE DATABASE ${DBName};
-            #     GRANT ALL ON ${DBName}.* TO '${DBUser}'@localhost IDENTIFIED BY '${DBPassword}';
-            #   mode: '000400'
-            #   owner: root
-            #   group: root
-            /etc/cfn/cfn-hup.conf:
+            /tmp/create-user.sql:
               content: !Sub |
-                [main]
-                stack=${AWS::StackId}
-                region=${AWS::Region}
-                interval=1
-              mode: '000400'
-              owner: root
-              group: root
-            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-              content: !Sub |-
-                [cfn-auto-reloader-hook]
-                triggers=post.update,post.add
-                path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init
-                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --configsets InstallAndRun --region ${AWS::Region}
-                runas=root
+                CREATE USER IF NOT EXISTS '${DBUser}'@'%' IDENTIFIED BY '${DBPassword}';
+                GRANT ALL PRIVILEGES ON ${DBName}.* TO '${DBUser}'@'%';
+                FLUSH PRIVILEGES;
               mode: '000400'
               owner: root
               group: root
@@ -318,34 +408,23 @@ Resources:
               owner: apache
               group: apache
           services:
-            sysvinit:
-              # mysqld:
-              #   enabled: 'true'
-              #   ensureRunning: 'true'
-              httpd:
-                enabled: 'true'
-                ensureRunning: 'true'
-              # Habilitación del servicio cfh-hup, que escucha cambios en el Metadata
-              cfn-hup:
-                enabled: 'true'
-                ensureRunning: 'true'
-                files:
-                  - /etc/cfn/cfn-hup.conf
-                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
-        # Configure:
-        #   commands:
-        #     01_set_mysql_root_password:
-        #       command: !Sub |-
-        #         mysqladmin -u root password '${DBRootPassword}'
-        #       test: !Sub |-
-        #         $(mysql ${DBName} -u root --password='${DBRootPassword}' >/dev/null 2>&1 </dev/null); (( $? != 0 ))
-        #     02_create_database:
-        #       command: !Sub |-
-        #         mysql -u root --password='${DBRootPassword}' < /tmp/setup.mysql
-        #       test: !Sub |-
-        #         $(mysql ${DBName} -u root --password='${DBRootPassword}' >/dev/null 2>&1 </dev/null); (( $? != 0 ))
+              sysvinit:
+                httpd:
+                  enabled: 'true'
+                  ensureRunning: 'true'
+                # Habilitación del servicio cfh-hup, que escucha cambios en el Metadata
+                cfn-hup:
+                  enabled: 'true'
+                  ensureRunning: 'true'
+                  files:
+                    - /etc/cfn/cfn-hup.conf
+                    - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        Configure:
+          commands:
+            01_create_user:
+              command: !Sub |
+                mariadb -h ${DatabaseServer.Endpoint.Address} -u ${DBRootUser} -p'${DBRootPassword}' < /tmp/create-user.sql
     Properties:
-      IamInstanceProfile: !Ref MyInstanceProfile
       ImageId: !FindInMap 
         - AWSRegionArch2AMI
         - !Ref 'AWS::Region'
@@ -354,34 +433,29 @@ Resources:
           - !Ref InstanceType
           - Arch
       InstanceType: !Ref InstanceType
-      SecurityGroups:
+      KeyName: !Ref KeyName
+      SubnetId: !Ref FirstPublicSubnet
+      SecurityGroupIds:
         - !Ref WebServerSecurityGroup
-      UserData: !Base64
-        Fn::Sub: |-
+      IamInstanceProfile: !Ref MyInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
           #!/bin/bash -xe
           yum update -y aws-cfn-bootstrap
-          # Aplicar la configuración definida en la sección Metadata
           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --configsets InstallAndRun --region ${AWS::Region}
-          # Enviar señal a CloudFormation con el código de éxito/error del comando cfn-init
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT5M
-  MyInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
-    Properties: 
-      Path: "/"
-      Roles: 
-        - "LabRole"
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref ExerciseName, WebServer, !Ref AWS::StackName],
+            ]
+
 Outputs:
+  DataBaseEndpoint:
+    Description: RDS Endpoint
+    Value: !GetAtt DatabaseServer.Endpoint.Address
   WebsiteURL:
-    Description: URL for newly created LAMP stack
-    Value: !Join 
-      - ''
-      - - 'http://'
-        - !GetAtt 
-          - WebServerInstance
-          - PublicDnsName
-  DBInstanceEndpoint:
-    Description: The endpoint of the RDS DB instance
-    Value: !GetAtt LampDBInstance.Endpoint.Address
+    Description: URL of the EC2 Web Server
+    Value: !Sub 'http://${WebServerInstance.PublicDnsName}'
