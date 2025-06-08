@@ -1,17 +1,11 @@
-FROM public.ecr.aws/amazonlinux/amazonlinux:latest
+FROM alpine:latest
 
-# Actualizar paquetes e instalar Apache
-RUN yum update -y && \
- yum install -y httpd
+MAINTAINER alex <alexwhen@gmail.com> 
 
-RUN echo 'Hola, habitantes del CEFIRE!!!' > /var/www/html/index.html
+RUN apk --update add nginx
 
-# Configurar Apache
-RUN echo 'mkdir -p /var/run/httpd' >> /root/run_apache.sh && \
- echo 'mkdir -p /var/lock/httpd' >> /root/run_apache.sh && \
- echo '/usr/sbin/httpd -D FOREGROUND' >> /root/run_apache.sh && \
- chmod 755 /root/run_apache.sh
+COPY 2048 /usr/share/nginx/html
 
 EXPOSE 80
 
-CMD /root/run_apache.sh
+CMD ["nginx", "-g", "daemon off;"]
