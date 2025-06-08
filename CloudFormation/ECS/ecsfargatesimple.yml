@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Despliegue de un cluster ECS sencillo en subredes públicas'
+
+Parameters:
+  ClusterName:
+     Type: String
+     Default: MiClusterECS
+     Description: Nombre del cluster
+  ServiceName:
+    Type: String
+    Default: web
+    Description: Nombre del servicio
+  ImageUrl:
+    Type: String
+    Default: 'public.ecr.aws/docker/library/nginx:latest'
+    Description: >-
+      URL de la imagen de Docker con la aplicación
+  ContainerCpu:
+    Type: Number
+    Default: 256
+    Description: CPU asignada al contenedor. 1024 es 1 CPU
+  ContainerMemory:
+    Type: Number
+    Default: 512
+    Description: Memoria RAM asignada al contenedor (MB)
+  ContainerPort:
+    Type: Number
+    Default: 80
+    Description: Puerto de escucha de la aplicación
+  DesiredCount:
+    Type: Number
+    Default: 2
+    Description: Número de tareas que desplegará el servicio (relacionado con el número de contenedores)
+
+Resources:
+  # Create a VPC
+  MiVPCVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: MiVPC-vpc
+
+  # Create a public subnet
+  MiVPCSubnetPublic1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MiVPCVPC
+      AvailabilityZone: us-east-1a
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: MiVPC-subnet-public1-us-east-1a
+
+  # Create a public subnet
+  MiVPCSubnetPublic2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MiVPCVPC
+      AvailabilityZone: us-east-1b
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: MiVPC-subnet-public2-us-east-1b
+
+  # Create an internet gateway
+  MiVPCIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MiVPC-igw
+
+  # Attach the internet gateway to the VPC
+  MiVPCIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MiVPCVPC
+      InternetGatewayId: !Ref MiVPCIGW
+
+  # Create a public route table
+  MiVPCRouteTablePublic:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MiVPCVPC
+      Tags:
+        - Key: Name
+          Value: MiVPC-rtb-public
+
+  # Create a route for internet access
+  MiVPCRoutePublicInternetAccess:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref MiVPCRouteTablePublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MiVPCIGW
+
+  # Associate the public subnet 1 with the public route table
+  MiVPCSubnetPublic1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MiVPCSubnetPublic1
+      RouteTableId: !Ref MiVPCRouteTablePublic
+
+  # Associate the public subnet 2 with the public route table
+  MiVPCSubnetPublic2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MiVPCSubnetPublic2
+      RouteTableId: !Ref MiVPCRouteTablePublic
+
+  # ECS cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+
+  # Definición de tarea
+  TaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Ref ServiceName
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      # LabRole de academy
+      ExecutionRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
+      ContainerDefinitions:
+        - Name: !Ref ServiceName
+          Cpu: !Ref ContainerCpu
+          Memory: !Ref ContainerMemory
+          Image: !Ref ImageUrl
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              HostPort: !Ref ContainerPort
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              mode: non-blocking
+              max-buffer-size: 25m
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: !Ref ServiceName
+
+  # Servicio
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref ServiceName
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref TaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ServiceSecurityGroup
+          Subnets:
+            - !Ref MiVPCSubnetPublic1
+            - !Ref MiVPCSubnetPublic2
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      DesiredCount: !Ref DesiredCount
+      
+  # Grupo de seguridad para las tareas de contenedores
+  # Apertura del puerto 80
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Grupo de seguridad del servicio
+      VpcId: !Ref MiVPCVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
