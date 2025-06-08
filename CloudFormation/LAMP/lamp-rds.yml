@@ -291,6 +291,7 @@ Resources:
 
   DatabaseServer:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
     Properties:
       DBInstanceIdentifier: lampdb
       DBInstanceClass: db.t3.micro
