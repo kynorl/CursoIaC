@@ -6,8 +6,9 @@ DEMO_PASSWORD="${DEMO_PASSWORD}"
 DEMO_EMAIL="${DEMO_EMAIL}"
 
 mkdir -p /var/www/html/
-mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${efs_id}.efs.${region}.amazonaws.com:/ /var/www/html/
+# Instalar utilidades de EFS antes de montar el sistema de archivos
 yum install -y amazon-efs-utils
+mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${efs_id}.efs.${region}.amazonaws.com:/ /var/www/html/
 echo '${efs_id}.efs.${region}.amazonaws.com:/ /var/www/html/ efs defaults,_netdev 0 0' >> /etc/fstab
 
 yum install -y httpd
