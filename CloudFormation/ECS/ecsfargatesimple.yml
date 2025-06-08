@@ -126,8 +126,6 @@ Resources:
     Type: 'AWS::ECS::TaskDefinition'
     Properties:
       Family: !Ref ServiceName
-      RuntimePlatform:
-        CpuArchitecture: ARM64
       Cpu: !Ref ContainerCpu
       Memory: !Ref ContainerMemory
       NetworkMode: awsvpc
